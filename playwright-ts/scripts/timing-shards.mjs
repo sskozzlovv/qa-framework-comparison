@@ -8,6 +8,8 @@
 //   node scripts/timing-shards.mjs list --index 2 --total 3 --out shard.txt   tests of shard 2 of 3 for --test-list
 //
 // Test ids are "file › describe › title" - the format --test-list accepts (file relative to testDir).
+// The file part always uses "/": Playwright writes "examples\x.spec.ts" on Windows and "examples/x.spec.ts" on
+// Linux, so timings saved on a CI runner would not match a local list (and the other way round).
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -23,6 +25,8 @@ const opt = name => {
 
 // ------------------------------------------------------------------ helpers
 
+const slashes = file => file.replace(/\\/g, '/');
+
 /** All tests Playwright would run now (same config, same filters): ids + count-based shard if asked. */
 function listTests(shard) {
   const cli = path.join(root, 'node_modules', 'playwright', 'cli.js');
@@ -34,7 +38,7 @@ function listTests(shard) {
     for (const spec of suite.specs ?? []) ids.add([...titles, spec.title].join(' › '));
     for (const child of suite.suites ?? []) walk(child, [...titles, child.title]);
   };
-  for (const fileSuite of JSON.parse(result.stdout).suites) walk(fileSuite, [fileSuite.title]);
+  for (const fileSuite of JSON.parse(result.stdout).suites) walk(fileSuite, [slashes(fileSuite.title)]);
   return [...ids];
 }
 
@@ -46,7 +50,7 @@ function timingsFromJunit(file) {
   const timings = {};
   const re = /<testcase name="([^"]*)" classname="([^"]*)" time="([\d.]+)"/g;
   for (const [, name, classname, time] of readFileSync(file, 'utf8').matchAll(re)) {
-    timings[`${decode(classname)} › ${decode(name)}`] = Number(time);
+    timings[`${slashes(decode(classname))} › ${decode(name)}`] = Number(time);
   }
   return timings;
 }
