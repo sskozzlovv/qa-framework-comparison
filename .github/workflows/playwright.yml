@@ -14,6 +14,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      split:
+        description: 'How to split tests between shards: time (durations from test-timings.json) or count (--shard)'
+        type: choice
+        options: [time, count]
+        default: time
 
 # a newer push to the same branch cancels the run that is still going
 concurrency:
@@ -35,6 +41,10 @@ jobs:
     env:
       CI: 'true'                  # playwright.config.ts: 2 workers, 2 retries, forbidOnly
       BLOB_REPORT: '1'            # every shard writes a blob report, merged by the next job
+      # a unique blob file per shard: without --shard (split by time) every shard would write the same name
+      PLAYWRIGHT_BLOB_OUTPUT_NAME: report-${{ matrix.shard }}.zip
+      # push / pull_request have no inputs -> split by time
+      SPLIT: ${{ inputs.split || 'time' }}
     defaults:
       run:
         working-directory: playwright-ts
@@ -60,8 +70,17 @@ jobs:
       # ffmpeg records the video of failed tests
       - run: npx playwright install ffmpeg
 
-      - name: Run tests
-        run: npx playwright test --shard=${{ matrix.shard }}/3
+      # strategy.job-total = how many jobs this matrix has: the number of shards is written only once, above
+      - name: Run tests (split by ${{ env.SPLIT }})
+        run: |
+          if [ "$SPLIT" = "count" ]; then
+            # Playwright's own sharding: the same NUMBER of tests per shard
+            npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+          else
+            # the same TIME per shard: durations of an earlier run (test-timings.json), longest tests first
+            node scripts/timing-shards.mjs list --index ${{ matrix.shard }} --total ${{ strategy.job-total }} --out shard-tests.txt
+            npx playwright test --test-list shard-tests.txt
+          fi
 
       - name: Upload blob report
         if: ${{ !cancelled() }}
@@ -108,6 +127,26 @@ jobs:
 
       - run: npx playwright merge-reports --reporter html ./all-blob-reports
         working-directory: playwright-ts
+
+      # durations of THIS run for the next split by time: download the artifact, replace
+      # playwright-ts/test-timings.json with it and commit (CI runner timings beat local ones)
+      - name: Save test timings
+        working-directory: playwright-ts
+        env:
+          PLAYWRIGHT_JUNIT_OUTPUT_NAME: merged-junit.xml
+        run: |
+          npx playwright merge-reports --reporter junit ./all-blob-reports
+          node scripts/timing-shards.mjs save --from merged-junit.xml
+          # run summary page: how the NEXT run would split with these durations (shards = number of blob reports)
+          SHARDS=$(ls all-blob-reports/*.zip | wc -l)
+          { echo '### Split by count vs by time (durations of this run)'; echo '```'
+            node scripts/timing-shards.mjs plan --total "$SHARDS"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-timings
+          path: playwright-ts/test-timings.json
+          retention-days: 14
 
       - uses: actions/upload-artifact@v4
         with:

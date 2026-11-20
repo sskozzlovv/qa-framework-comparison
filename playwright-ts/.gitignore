@@ -5,3 +5,5 @@ blob-report/
 playwright/.cache/
 allure-results/
 all-blob-reports/
+shard-tests.txt
+merged-junit.xml

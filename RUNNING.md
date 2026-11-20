@@ -14,6 +14,7 @@ Docker, CI, Allure и линтеров здесь ещё нет — они по�
 - [4. Playwright TS](#4-playwright-ts)
 - [5. Где лежат отчёты и артефакты](#5-где-лежат-отчёты-и-артефакты)
 - [6. Allure: один отчёт для Selenide (JUnit 5, TestNG) и Playwright TS](#6-allure-один-отчёт-для-selenide-junit-5-testng-и-playwright-ts)
+- [7. Шардинг Playwright TS: по количеству и по времени, GitHub Actions](#7-шардинг-playwright-ts-по-количеству-и-по-времени-github-actions)
 
 ---
 
@@ -267,3 +268,45 @@ npm run allure2:open
 
 Осторожно: `npx playwright test --reporter=dot` (или любой `--reporter`) заменяет reporter'ы из конфига — Allure
 тогда ничего не запишет.
+
+---
+
+## 7. Шардинг Playwright TS: по количеству и по времени, GitHub Actions
+
+**Шард** — часть тестов, которую выполняет одна машина; шарды идут одновременно на разных машинах, общий прогон
+ждёт самый медленный. Делить можно двумя способами:
+
+| Способ | Как | Чем плох / хорош |
+|---|---|---|
+| **по количеству** — встроенный `--shard=i/N` | Playwright режет список тестов на N частей с одинаковым **числом** тестов | медленные тесты могут собраться в одном шарде |
+| **по времени** — [`playwright-ts/scripts/timing-shards.mjs`](playwright-ts/scripts/timing-shards.mjs) | берёт длительности прошлого прогона (`playwright-ts/test-timings.json`) и раскладывает тесты «самый долгий — в самый лёгкий шард»; шард запускает ровно свои тесты через `--test-list` | шарды заканчиваются почти одновременно; нужна история времени |
+
+Локально (из `playwright-ts/`):
+
+| Что | Команда |
+|---|---|
+| Сравнить два способа на текущей истории | `node scripts/timing-shards.mjs plan --total 3` |
+| Тесты шарда 2 из 3 по времени → файл | `node scripts/timing-shards.mjs list --index 2 --total 3 --out shard-tests.txt` |
+| Запустить этот шард | `npx playwright test --test-list shard-tests.txt` |
+| Обновить историю после полного прогона | `npx playwright test`, потом `node scripts/timing-shards.mjs save` |
+| Шард по количеству | `npx playwright test --shard=2/3` |
+
+Пример на одной и той же истории (40 тестов, сумма их длительностей 168.6 с):
+
+| Шард | по количеству | по времени |
+|---|---|---|
+| 1 | 14 тестов, 64.8 с | 14 тестов, 57.1 с |
+| 2 | 13 тестов, 64.5 с | 13 тестов, 55.8 с |
+| 3 | 13 тестов, 39.2 с | 13 тестов, 55.7 с |
+| самый медленный | **64.8 с** | **57.1 с** |
+
+**GitHub Actions** — [`.github/workflows/playwright.yml`](.github/workflows/playwright.yml): при push в `main`, на pull
+request или вручную (Actions → Playwright TS → Run workflow, параметр `split`: `time` или `count`):
+
+- job `test` — `matrix: shard: [1, 2, 3]`: три runner'а (отдельные машины GitHub) одновременно, у каждого свой шард;
+  число шардов задаётся только списком (`strategy.job-total` в команде);
+- job `report` — после всех шардов: один HTML-отчёт Playwright (`merge-reports` из blob-отчётов шардов), один Allure 2,
+  `test-timings.json` с длительностями этого прогона и сравнение двух способов на странице запуска (Summary).
+
+Обновить историю по CI: скачай артефакт `test-timings` последнего запуска, замени им `playwright-ts/test-timings.json`
+и закоммить — длительности на runner'ах GitHub точнее локальных.
