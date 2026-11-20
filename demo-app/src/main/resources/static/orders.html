@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sandbox Shop - Orders</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/catalog.html">Sandbox Shop</a>
+  <nav>
+    <a id="nav-catalog" href="/catalog.html">Catalog</a>
+    <a id="nav-orders" href="/orders.html">Orders</a>
+    <a id="nav-playground" href="/playground.html">Playground</a>
+    <a id="nav-cart" href="/cart.html">Cart <span id="cart-badge" class="badge" hidden></span></a>
+    <span id="current-user"></span>
+    <button id="logout" class="secondary">Log out</button>
+  </nav>
+</header>
+<div id="spinner" class="spinner-overlay" hidden><div class="spinner" role="progressbar" aria-label="Loading"></div></div>
+<div id="toasts"></div>
+<main>
+  <h1>My orders</h1>
+  <div class="toolbar">
+    <!-- The page does NOT poll the server: statuses change only after Refresh -->
+    <button id="refresh" class="secondary">Refresh</button>
+    <span id="orders-count"></span>
+  </div>
+  <p id="no-orders" hidden>You have no orders yet.</p>
+  <table id="orders">
+    <thead><tr><th>Order</th><th>Items</th><th>Total</th><th>Status</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <p><button id="load-more" hidden>Load more</button></p>
+</main>
+<script src="/app.js"></script>
+<script>
+  if (App.requireAuth()) {
+    App.initHeader();
+    const PAGE = 5;
+    const tbody = document.querySelector('#orders tbody');
+    let offset = 0;
+
+    async function loadPage(reset) {
+      if (reset) offset = 0;
+      const page = await App.withSpinner(App.api('GET', `/api/orders?offset=${offset}&limit=${PAGE}`));
+      if (reset) tbody.innerHTML = '';
+      for (const o of page.items) {
+        const tr = document.createElement('tr');
+        tr.dataset.orderId = o.id;
+        tr.innerHTML = `<td class="order-id">${o.id}</td><td class="items">${o.itemCount}</td>
+          <td class="total">${App.money(o.totalCents)}</td>
+          <td><span class="status status-${o.status}">${o.status}</span></td>`;
+        tbody.appendChild(tr);
+      }
+      offset += page.items.length;
+      App.$('load-more').hidden = offset >= page.total;
+      App.$('no-orders').hidden = page.total > 0;
+      App.$('orders-count').textContent = `${page.total} orders`;
+    }
+
+    App.$('refresh').addEventListener('click', () => loadPage(true));
+    App.$('load-more').addEventListener('click', () => loadPage(false));
+    loadPage(true);
+  }
+</script>
+</body>
+</html>

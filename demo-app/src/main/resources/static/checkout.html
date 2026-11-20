@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sandbox Shop - Checkout</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/catalog.html">Sandbox Shop</a>
+  <nav>
+    <a id="nav-catalog" href="/catalog.html">Catalog</a>
+    <a id="nav-orders" href="/orders.html">Orders</a>
+    <a id="nav-playground" href="/playground.html">Playground</a>
+    <a id="nav-cart" href="/cart.html">Cart <span id="cart-badge" class="badge" hidden></span></a>
+    <span id="current-user"></span>
+    <button id="logout" class="secondary">Log out</button>
+  </nav>
+</header>
+<div id="spinner" class="spinner-overlay" hidden><div class="spinner" role="progressbar" aria-label="Loading"></div></div>
+<div id="toasts"></div>
+<main>
+  <h1>Checkout</h1>
+  <div class="panel" id="checkout-panel">
+    <p>Order total: <b id="summary-total">…</b></p>
+    <p id="empty-warning" class="error" hidden>Your cart is empty - add products first.</p>
+    <form id="checkout-form" novalidate>
+      <div class="form-row">
+        <label for="first-name">First name</label>
+        <input id="first-name">
+        <span class="field-error" data-for="first-name"></span>
+      </div>
+      <div class="form-row">
+        <label for="last-name">Last name</label>
+        <input id="last-name">
+        <span class="field-error" data-for="last-name"></span>
+      </div>
+      <div class="form-row">
+        <label for="zip">ZIP code</label>
+        <input id="zip" inputmode="numeric">
+        <span class="field-error" data-for="zip"></span>
+      </div>
+      <!-- Disabled until every field is valid -->
+      <button id="place-order" type="submit" disabled>Place order</button>
+    </form>
+    <p id="order-error" class="error" role="alert" hidden></p>
+  </div>
+
+  <!-- Fills up over ~2 s while the order is being placed, then hides -->
+  <div id="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden>
+    <div class="bar"></div><span class="label">0%</span>
+  </div>
+
+  <div class="panel" id="confirmation" hidden>
+    <h2>Thank you for your order!</h2>
+    <p>Order number: <b id="order-id"></b></p>
+    <a id="view-orders" href="/orders.html">View my orders</a>
+  </div>
+</main>
+<script src="/app.js"></script>
+<script>
+  if (App.requireAuth()) {
+    App.initHeader();
+    const rules = {
+      'first-name': v => v.length >= 2 || 'At least 2 characters',
+      'last-name': v => v.length >= 2 || 'At least 2 characters',
+      'zip': v => /^\d{5}$/.test(v) || 'ZIP must be 5 digits'
+    };
+    let cartEmpty = true;
+    const touched = new Set();
+
+    function validate() {
+      let ok = true;
+      for (const [id, rule] of Object.entries(rules)) {
+        const res = rule(App.$(id).value.trim());
+        const msg = res === true ? '' : res;
+        if (msg) ok = false;
+        document.querySelector(`.field-error[data-for="${id}"]`).textContent = touched.has(id) ? msg : '';
+      }
+      App.$('place-order').disabled = !ok || cartEmpty;
+      return ok;
+    }
+
+    for (const id of Object.keys(rules)) {
+      App.$(id).addEventListener('input', validate);
+      App.$(id).addEventListener('blur', () => { touched.add(id); validate(); });
+    }
+
+    function setProgress(v) {
+      const p = App.$('progress');
+      p.setAttribute('aria-valuenow', v);
+      p.querySelector('.bar').style.width = v + '%';
+      p.querySelector('.label').textContent = v + '%';
+    }
+
+    App.$('checkout-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!validate()) return;
+      App.$('place-order').disabled = true;
+      document.querySelectorAll('#checkout-form input').forEach(i => i.disabled = true);
+      App.$('order-error').hidden = true;
+      setProgress(0);
+      App.$('progress').hidden = false;
+      const orderPromise = App.api('POST', '/api/orders', {
+        firstName: App.$('first-name').value, lastName: App.$('last-name').value, zip: App.$('zip').value
+      });
+      orderPromise.catch(() => {}); // handled below
+      for (let v = 10; v <= 90; v += 10) {
+        await App.sleep(150 + Math.random() * 100);
+        setProgress(v);
+      }
+      try {
+        const order = await orderPromise;
+        setProgress(100);
+        await App.sleep(300);
+        App.$('checkout-panel').hidden = true;
+        App.$('order-id').textContent = order.id;
+        App.$('confirmation').hidden = false;
+        App.refreshBadge();
+      } catch (err) {
+        App.$('order-error').textContent = err.message;
+        App.$('order-error').hidden = false;
+        document.querySelectorAll('#checkout-form input').forEach(i => i.disabled = false);
+        validate();
+      } finally {
+        App.$('progress').hidden = true;
+      }
+    });
+
+    App.withSpinner(App.api('GET', '/api/cart')).then(cart => {
+      cartEmpty = cart.items.length === 0;
+      App.$('summary-total').textContent = App.money(cart.totalCents);
+      App.$('empty-warning').hidden = !cartEmpty;
+      validate();
+    });
+  }
+</script>
+</body>
+</html>

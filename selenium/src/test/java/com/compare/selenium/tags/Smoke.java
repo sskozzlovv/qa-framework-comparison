@@ -1,0 +1,15 @@
+package com.compare.selenium.tags;
+
+import org.junit.jupiter.api.Tag;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+/** Composed annotation = @Tag("smoke") without typos. Run with -Dgroups=smoke. */
+@Target({ElementType.TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+@Tag("smoke")
+public @interface Smoke {
+}

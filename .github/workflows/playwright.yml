@@ -1,0 +1,133 @@
+# Playwright TS on GitHub Actions: 3 shards in parallel, then ONE Playwright HTML report and ONE Allure report.
+#
+#   push to main, pull request, or by hand: Actions -> Playwright TS -> Run workflow
+#   reports: the run's page -> Artifacts (playwright-report, allure-report) - unzip, open index.html
+#
+# Compared with the Jenkins stand (jenkins/Jenkinsfile.playwright-ts):
+#   agent          -> GitHub-hosted runner (ubuntu-latest), a fresh VM for EVERY job, nothing to register
+#   parallel {}    -> strategy.matrix: 3 jobs at the same time, each with --shard=i/3
+#   publishHTML    -> artifacts (the merged Playwright report)
+name: Playwright TS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# a newer push to the same branch cancels the run that is still going
+concurrency:
+  group: playwright-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Shard ${{ matrix.shard }}/3
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false            # one failing shard must not cancel the others
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      CI: 'true'                  # playwright.config.ts: 2 workers, 2 retries, forbidOnly
+      BLOB_REPORT: '1'            # every shard writes a blob report, merged by the next job
+    defaults:
+      run:
+        working-directory: playwright-ts
+    steps:
+      - uses: actions/checkout@v4
+
+      # Playwright's webServer builds and starts the Java demo-app with ./mvnw: needs JDK 21
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: playwright-ts/package-lock.json
+
+      - run: npm ci
+
+      # Google Chrome is already on the runner (playwright.config.ts uses channel: 'chrome');
+      # ffmpeg records the video of failed tests
+      - run: npx playwright install ffmpeg
+
+      - name: Run tests
+        run: npx playwright test --shard=${{ matrix.shard }}/3
+
+      - name: Upload blob report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: playwright-ts/blob-report
+          retention-days: 3
+
+      - name: Upload Allure results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-${{ matrix.shard }}
+          path: playwright-ts/allure-results
+          retention-days: 3
+
+  report:
+    name: Merge reports
+    needs: test
+    if: ${{ !cancelled() }}       # also when tests failed - that is when the report matters most
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4  # Allure 2 commandline is Java
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # ---- one Playwright HTML report from the 3 blob reports
+      - run: npm ci
+        working-directory: playwright-ts
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: blob-report-*
+          path: playwright-ts/all-blob-reports
+          merge-multiple: true
+
+      - run: npx playwright merge-reports --reporter html ./all-blob-reports
+        working-directory: playwright-ts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-ts/playwright-report
+          retention-days: 14
+
+      # ---- one Allure report (classic Allure 2, single file) from the 3 allure-results folders
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: allure-results-*
+          path: playwright-ts/allure-results
+          merge-multiple: true      # result files have unique (UUID) names - no clashes
+
+      - run: npm ci                 # root package.json: allure-commandline (Allure 2) and allure (Allure 3)
+
+      - run: node scripts/allure-report.mjs 2 generate playwright-ts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: allure-report
+          path: allure-report-2
+          retention-days: 14

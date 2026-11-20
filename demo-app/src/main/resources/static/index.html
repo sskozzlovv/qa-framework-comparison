@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sandbox Shop - Login</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="spinner" class="spinner-overlay" hidden><div class="spinner" role="progressbar" aria-label="Loading"></div></div>
+<div id="toasts"></div>
+<main>
+  <div class="panel" style="max-width:380px;margin:60px auto">
+    <h1>Sandbox Shop</h1>
+    <form id="login-form" novalidate>
+      <div class="form-row">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="off">
+      </div>
+      <div class="form-row">
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password">
+      </div>
+      <p data-test="login-error" class="error" role="alert" hidden></p>
+      <button id="login" type="submit">Log in</button>
+    </form>
+    <p style="color:#6b7385;font-size:13px">Any username + password <b>secret</b>. <code>locked_*</code> users are locked,
+      <code>slow_*</code> users are 4x slower.</p>
+  </div>
+</main>
+<script src="/app.js"></script>
+<script>
+  if (App.token()) location.replace('/catalog.html');
+  const error = document.querySelector('[data-test=login-error]');
+  App.$('login-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    error.hidden = true;
+    App.$('login').disabled = true;
+    try {
+      const r = await App.withSpinner(App.api('POST', '/api/login', {
+        username: App.$('username').value, password: App.$('password').value
+      }));
+      localStorage.setItem('token', r.token);
+      localStorage.setItem('username', r.username);
+      location.assign('/catalog.html');
+    } catch (err) {
+      error.textContent = err.message;
+      error.hidden = false;
+    } finally {
+      App.$('login').disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

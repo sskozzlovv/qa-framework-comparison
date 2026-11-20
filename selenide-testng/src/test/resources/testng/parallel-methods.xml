@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!--
+  parallel="methods": even methods of ONE class run at the same time - on the SAME instance of the class.
+  That is why BaseTest keeps user/api in ThreadLocal, not in plain fields.
+    ./mvnw -pl selenide-testng -am test -Dsuite=parallel-methods
+  data-provider-thread-count: rows of a @DataProvider(parallel = true) would run in their own pool.
+-->
+<suite name="Selenide + TestNG: parallel methods" parallel="methods" thread-count="4" data-provider-thread-count="2">
+
+    <listeners>
+        <listener class-name="com.compare.testng.listeners.ConsoleLogListener"/>
+    </listeners>
+
+    <test name="All tests, methods in parallel">
+        <groups>
+            <run>
+                <exclude name="demo-failure"/>
+            </run>
+        </groups>
+        <packages>
+            <package name="com.compare.testng.tests"/>
+        </packages>
+    </test>
+</suite>

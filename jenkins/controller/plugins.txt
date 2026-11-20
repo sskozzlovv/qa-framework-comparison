@@ -1,0 +1,11 @@
+# Plugins installed into the controller image (jenkins-plugin-cli picks the latest versions compatible with the core).
+configuration-as-code
+job-dsl
+workflow-aggregator
+pipeline-stage-view
+git
+ssh-slaves
+timestamper
+junit
+allure-jenkins-plugin
+htmlpublisher

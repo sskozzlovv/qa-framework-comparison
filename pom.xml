@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.compare</groupId>
+    <artifactId>framework-comparison</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>UI framework comparison: Selenium vs Selenide vs Playwright</name>
+
+    <modules>
+        <module>demo-app</module>
+        <module>selenium</module>
+        <module>selenide</module>
+        <module>selenide-testng</module>
+        <module>playwright</module>
+    </modules>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <selenium.version>4.51.0</selenium.version>
+        <selenide.version>7.19.1</selenide.version>
+        <playwright.version>1.64.0</playwright.version>
+        <junit.version>5.14.4</junit.version>
+        <assertj.version>3.27.7</assertj.version>
+        <slf4j.version>2.0.20</slf4j.version>
+        <gson.version>2.13.1</gson.version>
+        <allure.version>2.35.5</allure.version>
+
+        <!-- Allure: the framework name on every test (label "epic"), so one report can hold several modules -->
+        <allure.epic>${project.name}</allure.epic>
+
+        <!-- Test run switches (all can be overridden with -D...) -->
+        <test.parallel>true</test.parallel>
+        <test.threads>3</test.threads>
+        <test.retries>0</test.retries>
+        <!-- FailureDemoTest fails on purpose; run it with -Dgroups=demo-failure -DexcludedGroups= -->
+        <excludedGroups>demo-failure</excludedGroups>
+        <!-- JDK 25 on Windows: AF_UNIX temp dir with 8.3 short names breaks loopback sockets (see README) -->
+        <unixdomain.tmpdir>${project.build.directory}</unixdomain.tmpdir>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-bom</artifactId>
+                <version>${allure.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.compare</groupId>
+                <artifactId>demo-app</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.assertj</groupId>
+                <artifactId>assertj-core</artifactId>
+                <version>${assertj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.slf4j</groupId>
+                <artifactId>slf4j-simple</artifactId>
+                <version>${slf4j.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.google.code.gson</groupId>
+                <artifactId>gson</artifactId>
+                <version>${gson.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.15.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-surefire-plugin</artifactId>
+                    <version>3.6.1</version>
+                    <configuration>
+                        <!-- -Dgroups=smoke | -Dgroups="critical | smoke" | -Dtest=SmokeSuite -->
+                        <excludedGroups>${excludedGroups}</excludedGroups>
+                        <!-- Retries are a band-aid: flaky tests show up as "Flakes" in the report -->
+                        <rerunFailingTestsCount>${test.retries}</rerunFailingTestsCount>
+                        <trimStackTrace>false</trimStackTrace>
+                        <argLine>-Djdk.net.unixdomain.tmpdir=${unixdomain.tmpdir}</argLine>
+                        <!-- Allure (only modules with an allure-* dependency write anything): where results go + framework label -->
+                        <systemPropertyVariables>
+                            <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                            <allure.label.epic>${allure.epic}</allure.label.epic>
+                        </systemPropertyVariables>
+                        <properties>
+                            <!-- These override src/test/resources/junit-platform.properties -->
+                            <configurationParameters>
+                                junit.jupiter.execution.parallel.enabled = ${test.parallel}
+                                junit.jupiter.execution.parallel.config.fixed.parallelism = ${test.threads}
+                                junit.jupiter.execution.parallel.config.fixed.max-pool-size = ${test.threads}
+                            </configurationParameters>
+                        </properties>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

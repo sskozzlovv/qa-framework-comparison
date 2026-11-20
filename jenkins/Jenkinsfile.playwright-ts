@@ -1,0 +1,52 @@
+// Playwright TS on the local Jenkins stand.
+//   tests AND browser (Google Chrome) -> agent-1 (label 'playwright'); no Selenium Grid
+//   app under test -> started by Playwright's webServer on the agent (built with ./mvnw on the first run)
+pipeline {
+    agent { label 'playwright' }
+
+    parameters {
+        string(name: 'GREP', defaultValue: '', description: 'only tests matching this, e.g. @smoke (empty = all)')
+    }
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    environment {
+        CI = 'true'                              // playwright.config.ts: 2 workers, 2 retries, forbidOnly
+        npm_config_cache = '/home/jenkins/.npm'
+    }
+
+    stages {
+        stage('Install') {
+            steps {
+                dir('playwright-ts') { sh 'npm ci' }
+            }
+        }
+        stage('Tests') {
+            steps {
+                dir('playwright-ts') {
+                    // failed tests -> UNSTABLE (yellow), the reports below still run
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                        sh 'npx playwright test ${GREP:+--grep "$GREP"}'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            junit testResults: 'playwright-ts/test-results/junit.xml', allowEmptyResults: true
+            allure commandline: 'allure', includeProperties: false,
+                   results: [[path: 'playwright-ts/allure-results']]
+            // the native Playwright report: steps, screenshots, video and the TRACE of failed tests
+            publishHTML(target: [reportName: 'Playwright Report', reportDir: 'playwright-ts/playwright-report',
+                                 reportFiles: 'index.html', keepAll: true, alwaysLinkToLastBuild: true,
+                                 allowMissing: true])
+            archiveArtifacts artifacts: 'playwright-ts/test-results/**', allowEmptyArchive: true
+        }
+    }
+}

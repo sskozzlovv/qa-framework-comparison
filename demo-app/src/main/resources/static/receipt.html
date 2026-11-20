@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Receipt</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<main>
+  <h1>Receipt</h1>
+  <p>Customer: <b id="receipt-user"></b></p>
+</main>
+<script>
+  // Same origin -> the new tab shares localStorage with the opener
+  document.getElementById('receipt-user').textContent = localStorage.getItem('username') || 'anonymous';
+</script>
+</body>
+</html>

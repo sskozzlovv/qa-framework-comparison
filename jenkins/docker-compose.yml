@@ -1,0 +1,63 @@
+# Local CI stand: Jenkins (controller + agent) + Selenium Grid + the app under test. Start with jenkins/up.sh.
+#
+#   http://localhost:8081       Jenkins
+#   http://localhost:4444/ui/    Selenium Grid: nodes, slots, sessions, queue
+#   http://localhost:7900       noVNC: watch the Grid browser live (no password)
+#   http://localhost:8080       the app under test (demo-app)
+#
+# Every port listens on 127.0.0.1 only: Jenkins runs WITHOUT login (local stand).
+# Stop: docker compose -f jenkins/docker-compose.yml down   (+ -v to also drop Jenkins home and caches).
+# REPO_GIT_DIR and JENKINS_AGENT_SSH_PUBKEY come from jenkins/.env, written by jenkins/up.sh.
+name: qa-jenkins
+
+services:
+  jenkins:
+    build: ./controller
+    image: qa-jenkins-controller:local
+    ports: ["127.0.0.1:8081:8080"]
+    volumes:
+      - jenkins-home:/var/jenkins_home          # jobs, builds, reports - survives restarts
+      - ./casc:/casc:ro                         # Configuration as Code (edit + restart or Manage Jenkins -> Reload)
+      - ./secrets:/run/secrets:ro               # SSH private key for the agent (made by up.sh, not in git)
+      - ${REPO_GIT_DIR:?run jenkins/up.sh}:/repo.git:ro   # the git repository of this project
+    depends_on: [agent]
+
+  agent:
+    build: ./agent
+    image: qa-jenkins-agent:local
+    environment:
+      JENKINS_AGENT_SSH_PUBKEY: ${JENKINS_AGENT_SSH_PUBKEY:?run jenkins/up.sh}   # the controller logs in with this key
+    volumes:
+      - ${REPO_GIT_DIR:?run jenkins/up.sh}:/repo.git:ro   # `checkout scm` clones from here
+      - agent-m2:/home/jenkins/.m2              # Maven cache
+      - agent-npm:/home/jenkins/.npm            # npm cache
+    shm_size: 2gb                               # Chrome of Playwright TS runs here
+
+  selenium-hub:
+    image: selenium/hub:4.51.0-20261010
+    ports: ["127.0.0.1:4444:4444"]
+    environment:
+      SE_SESSION_REQUEST_TIMEOUT: 120           # a session request waits in the queue at most 2 min (default 5)
+
+  chrome:
+    image: selenium/node-chrome:4.51.0-20261010
+    depends_on: [selenium-hub]
+    shm_size: 2gb
+    ports: ["127.0.0.1:7900:7900"]              # noVNC; with --scale chrome=N remove this line (one host port)
+    environment:
+      SE_EVENT_BUS_HOST: selenium-hub           # the node registers ITSELF at the hub - nothing to set up on the hub
+      SE_NODE_MAX_SESSIONS: 3                   # 3 slots = 3 browsers at once
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
+      SE_VNC_NO_PASSWORD: "true"
+
+  demo-app:
+    build:
+      context: ..
+      dockerfile: jenkins/app/Dockerfile
+    image: qa-demo-app:local
+    ports: ["127.0.0.1:8080:8080"]
+
+volumes:
+  jenkins-home:
+  agent-m2:
+  agent-npm:

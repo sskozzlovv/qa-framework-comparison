@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sandbox Shop - Playground</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/catalog.html">Sandbox Shop</a>
+  <nav>
+    <a id="nav-catalog" href="/catalog.html">Catalog</a>
+    <a id="nav-orders" href="/orders.html">Orders</a>
+    <a id="nav-playground" href="/playground.html">Playground</a>
+    <a id="nav-cart" href="/cart.html">Cart <span id="cart-badge" class="badge" hidden></span></a>
+    <span id="current-user"></span>
+    <button id="logout" class="secondary">Log out</button>
+  </nav>
+</header>
+<div id="spinner" class="spinner-overlay" hidden><div class="spinner" role="progressbar" aria-label="Loading"></div></div>
+<div id="toasts"></div>
+<main>
+  <h1>Browser playground</h1>
+
+  <section class="panel" id="dialogs">
+    <h2>1. Native dialogs (open 0.5 s after the click)</h2>
+    <button id="confirm-btn">Delete all data</button>
+    <button id="prompt-btn">Rename profile</button>
+    <p>Result: <output id="dialog-result"></output></p>
+  </section>
+
+  <section class="panel">
+    <h2>2. Support chat in an iframe</h2>
+    <iframe id="support-frame" title="Support" src="/support.html"></iframe>
+  </section>
+
+  <section class="panel">
+    <h2>3. Promo code widget (open shadow DOM)</h2>
+    <promo-code id="promo"></promo-code>
+  </section>
+
+  <section class="panel">
+    <h2>4. New tab</h2>
+    <a id="open-receipt" href="/receipt.html" target="_blank">Open receipt in a new tab</a>
+  </section>
+
+  <section class="panel">
+    <h2>5. Upload / download</h2>
+    <input id="file-input" type="file">
+    <p>Uploaded: <output id="upload-result">nothing</output></p>
+    <a id="download-report" href="/api/report.csv">Download products report (CSV)</a>
+  </section>
+
+  <section class="panel">
+    <h2>6. Lazy content (rendered when scrolled into view)</h2>
+    <div id="lazy-spacer">scroll down…</div>
+    <div id="lazy-box">Waiting to be seen…</div>
+  </section>
+</main>
+<script src="/app.js"></script>
+<script>
+  customElements.define('promo-code', class extends HTMLElement {
+    connectedCallback() {
+      const root = this.attachShadow({ mode: 'open' });
+      root.innerHTML = `<style>input{padding:6px;margin-right:6px}.result{font-weight:600}</style>
+        <input id="code" placeholder="Promo code"><button id="apply">Apply</button><p class="result"></p>`;
+      root.getElementById('apply').addEventListener('click', () => {
+        const code = root.getElementById('code').value.trim().toUpperCase();
+        root.querySelector('.result').textContent = code === 'SAVE10' ? 'Code applied: -10%' : 'Invalid code';
+      });
+    }
+  });
+
+  if (App.requireAuth()) {
+    App.initHeader();
+    const result = App.$('dialog-result');
+
+    App.$('confirm-btn').addEventListener('click', () => setTimeout(() => {
+      result.textContent = confirm('Delete all data?') ? 'confirmed' : 'cancelled';
+    }, 500));
+
+    App.$('prompt-btn').addEventListener('click', () => setTimeout(() => {
+      const name = prompt('New profile name', 'guest');
+      result.textContent = name === null ? 'rename cancelled' : 'renamed to ' + name;
+    }, 500));
+
+    App.$('file-input').addEventListener('change', e => {
+      const f = e.target.files[0];
+      App.$('upload-result').textContent = f ? `${f.name} (${f.size} bytes)` : 'nothing';
+    });
+
+    new IntersectionObserver((entries, observer) => {
+      if (entries.some(e => e.isIntersecting)) {
+        observer.disconnect();
+        setTimeout(() => App.$('lazy-box').textContent = 'Lazy content loaded', 300);
+      }
+    }).observe(App.$('lazy-box'));
+  }
+</script>
+</body>
+</html>

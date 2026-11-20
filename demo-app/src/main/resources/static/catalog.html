@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sandbox Shop - Catalog</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/catalog.html">Sandbox Shop</a>
+  <nav>
+    <a id="nav-catalog" href="/catalog.html">Catalog</a>
+    <a id="nav-orders" href="/orders.html">Orders</a>
+    <a id="nav-playground" href="/playground.html">Playground</a>
+    <a id="nav-cart" href="/cart.html">Cart <span id="cart-badge" class="badge" hidden></span></a>
+    <span id="current-user"></span>
+    <button id="logout" class="secondary">Log out</button>
+  </nav>
+</header>
+<div id="spinner" class="spinner-overlay" hidden><div class="spinner" role="progressbar" aria-label="Loading"></div></div>
+<div id="toasts"></div>
+
+<!-- Pops up at a random moment (0.3..1.2 s) unless localStorage['promo.dismissed'] === '1' -->
+<div id="promo-modal" class="modal-backdrop" hidden>
+  <div class="modal" role="dialog" aria-label="Promo">
+    <h2>Autumn sale!</h2>
+    <p>Use code <b>SAVE10</b> on the playground page.</p>
+    <button id="promo-close">Close</button>
+  </div>
+</div>
+
+<main>
+  <h1>Catalog</h1>
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="Search products" aria-label="Search products">
+    <select id="sort" aria-label="Sort">
+      <option value="name-asc">Name (A-Z)</option>
+      <option value="name-desc">Name (Z-A)</option>
+      <option value="price-asc">Price (low to high)</option>
+      <option value="price-desc">Price (high to low)</option>
+    </select>
+    <span id="result-count"></span>
+  </div>
+  <p id="load-error" class="error" role="alert" hidden></p>
+  <p id="no-results" hidden>No products found.</p>
+  <div id="products"></div>
+</main>
+<script src="/app.js"></script>
+<script>
+  if (App.requireAuth()) {
+    App.initHeader();
+    const list = App.$('products');
+    let debounce;
+
+    // The WHOLE list is re-rendered on every load -> previously found elements become stale.
+    async function load() {
+      const q = App.$('search').value.trim();
+      const sort = App.$('sort').value;
+      App.$('load-error').hidden = true;
+      try {
+        const products = await App.withSpinner(
+          App.api('GET', `/api/products?q=${encodeURIComponent(q)}&sort=${sort}`));
+        list.innerHTML = '';
+        for (const p of products) {
+          const card = document.createElement('div');
+          card.className = 'product-card';
+          card.dataset.id = p.id;
+          card.innerHTML = `<h3 class="name">${p.name}</h3><div class="category">${p.category}</div>
+            <div class="price">${App.money(p.priceCents)}</div><button class="add-to-cart">Add to cart</button>`;
+          const btn = card.querySelector('button');
+          btn.addEventListener('click', () => add(p, btn));
+          list.appendChild(card);
+        }
+        App.$('no-results').hidden = products.length > 0;
+        App.$('result-count').textContent = `${products.length} products`;
+      } catch (e) {
+        list.innerHTML = '';
+        App.$('result-count').textContent = '';
+        App.$('load-error').textContent = 'Could not load products: ' + e.message;
+        App.$('load-error').hidden = false;
+      }
+    }
+
+    async function add(product, btn) {
+      btn.disabled = true;
+      btn.textContent = 'Adding…';
+      try {
+        await App.api('POST', '/api/cart', { productId: product.id });
+        btn.textContent = 'Added';
+        btn.classList.add('added');
+        App.toast(`${product.name} added to cart`);
+        App.refreshBadge(); // async: the badge updates a bit later than the button
+      } catch (e) {
+        btn.textContent = 'Add to cart';
+        App.toast('Error: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Debounced search: the request starts 400 ms AFTER the last key press
+    App.$('search').addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(load, 400);
+    });
+    App.$('sort').addEventListener('change', load);
+
+    if (localStorage.getItem('promo.dismissed') !== '1') {
+      setTimeout(() => App.$('promo-modal').hidden = false, 300 + Math.random() * 900);
+    }
+    App.$('promo-close').addEventListener('click', () => {
+      App.$('promo-modal').hidden = true;
+      localStorage.setItem('promo.dismissed', '1');
+    });
+
+    load();
+  }
+</script>
+</body>
+</html>

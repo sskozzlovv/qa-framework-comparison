@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.compare</groupId>
+        <artifactId>framework-comparison</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>selenide-testng-framework</artifactId>
+    <name>Framework 2b: Selenide + TestNG</name>
+    <description>The same Selenide tests as selenide/, but run by TestNG: testng.xml suites, groups, DataProvider, listeners</description>
+
+    <properties>
+        <testng.version>7.12.0</testng.version>
+        <allure.epic>Selenide + TestNG</allure.epic>
+        <surefire.testng.version>3.5.6</surefire.testng.version>
+        <!-- Pitfall: the parent defines excludedGroups=demo-failure, and surefire reads that property even with a
+             suite XML - it would silently drop the group from EVERY testng.xml. Groups are the XML's job here. -->
+        <excludedGroups></excludedGroups>
+        <!-- which suite file to run: src/test/resources/testng/${suite}.xml  (-Dsuite=smoke) -->
+        <suite>all</suite>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.compare</groupId>
+            <artifactId>demo-app</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.codeborne</groupId>
+            <artifactId>selenide</artifactId>
+            <version>${selenide.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Selenide's TestNG integration (listeners: ScreenShooter, TextReport, SoftAsserts) -->
+        <dependency>
+            <groupId>com.codeborne</groupId>
+            <artifactId>selenide-testng</artifactId>
+            <version>${selenide.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>${testng.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Allure: allure-testng registers its listener by itself (ServiceLoader), allure-selenide turns Selenide actions into steps -->
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-testng</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-selenide</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <!-- Pitfall: surefire 3.6 dropped its own TestNG provider - TestNG then runs through the JUnit Platform
+                     engine, which does NOT read testng.xml. So this module stays on the 3.5 line. -->
+                <version>${surefire.testng.version}</version>
+                <!-- the parent configures surefire for JUnit 5 (tags, configurationParameters): replace it completely -->
+                <configuration combine.self="override">
+                    <!-- TestNG way: WHAT runs, in which groups and how parallel lives in the XML file.
+                         -Dtest=CartTest still works and ignores the XML. -->
+                    <suiteXmlFiles>
+                        <suiteXmlFile>src/test/resources/testng/${suite}.xml</suiteXmlFile>
+                    </suiteXmlFiles>
+                    <trimStackTrace>false</trimStackTrace>
+                    <argLine>-Djdk.net.unixdomain.tmpdir=${unixdomain.tmpdir}</argLine>
+                    <!-- the parent's systemPropertyVariables are dropped by combine.self="override" - repeat them -->
+                    <systemPropertyVariables>
+                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                        <allure.label.epic>${allure.epic}</allure.label.epic>
+                    </systemPropertyVariables>
+                </configuration>
+                <dependencies>
+                    <!-- the native TestNG provider: the one that reads testng.xml -->
+                    <dependency>
+                        <groupId>org.apache.maven.surefire</groupId>
+                        <artifactId>surefire-testng</artifactId>
+                        <version>${surefire.testng.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
+</project>

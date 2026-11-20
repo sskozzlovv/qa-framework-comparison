@@ -1,0 +1,9 @@
+# Build context of jenkins/app/Dockerfile is the repository root: keep it small
+**/target
+**/node_modules
+playwright-ts/test-results
+playwright-ts/playwright-report
+playwright-ts/allure-results
+allure-report*
+.idea
+jenkins/secrets

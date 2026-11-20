@@ -1,0 +1,28 @@
+{
+  "name": "playwright-ts-framework",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Framework 4: idiomatic Playwright Test (TypeScript) against Sandbox Shop",
+  "scripts": {
+    "test": "playwright test",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:critical": "playwright test --grep @critical",
+    "test:regression": "playwright test --grep @regression",
+    "test:all-browsers": "cross-env ALL_BROWSERS=1 playwright test",
+    "test:failure-demo": "cross-env FAILURE_DEMO=1 playwright test --grep @demo-failure",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "report": "playwright show-report",
+    "codegen": "playwright codegen http://127.0.0.1:4321",
+    "update-snapshots": "playwright test --update-snapshots",
+    "typecheck": "tsc --noEmit",
+    "app": "node scripts/start-demo-app.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "24.10.1",
+    "allure-playwright": "3.14.0",
+    "cross-env": "7.0.3",
+    "typescript": "5.9.3"
+  }
+}

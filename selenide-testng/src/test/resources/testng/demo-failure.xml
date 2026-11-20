@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE suite SYSTEM "https://testng.org/testng-1.0.dtd">
+<!--
+  The deliberately failing test - to see the failure screenshot.   ./mvnw -pl selenide-testng -am test -Dsuite=demo-failure
+-->
+<suite name="Selenide + TestNG: failure demo">
+
+    <!-- with -Dtest.retries=1 the failing test runs twice: the first attempt is reported as SKIPPED (TestNG's way) -->
+    <listeners>
+        <listener class-name="com.compare.testng.listeners.RetryTransformer"/>
+        <listener class-name="com.compare.testng.listeners.ConsoleLogListener"/>
+    </listeners>
+
+    <test name="Failure demo">
+        <groups>
+            <run>
+                <include name="demo-failure"/>
+            </run>
+        </groups>
+        <classes>
+            <class name="com.compare.testng.tests.FailureDemoTest"/>
+        </classes>
+    </test>
+</suite>

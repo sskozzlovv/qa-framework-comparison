@@ -1,0 +1,49 @@
+// Selenide + TestNG on the local Jenkins stand.
+//   tests (Maven + TestNG)  -> agent-1 (label 'maven'), no browser there
+//   browsers                -> Selenium Grid: -Dremote=http://selenium-hub:4444
+//   app under test          -> its own container; the Grid browser opens http://demo-app:8080
+pipeline {
+    agent { label 'maven' }
+
+    parameters {
+        choice(name: 'SUITE', choices: ['smoke', 'critical', 'regression', 'all', 'parallel-methods'],
+               description: 'selenide-testng/src/test/resources/testng/<SUITE>.xml')
+        booleanParam(name: 'HEADLESS', defaultValue: false,
+                     description: 'false: watch the browser live in noVNC, http://localhost:7900')
+    }
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    environment {
+        GRID_URL = 'http://selenium-hub:4444'
+        APP_URL  = 'http://demo-app:8080'
+    }
+
+    stages {
+        stage('Tests') {
+            steps {
+                // test failures must not stop the pipeline before the reports: the junit step below
+                // marks the build UNSTABLE (yellow) instead.
+                // ${SUITE:-smoke}: the very first build of a new job has no parameters yet (Jenkins learns them
+                // from this file during that build) - the shell default keeps it working.
+                sh '''./mvnw -B -pl selenide-testng -am test \
+                        -Dsuite=${SUITE:-smoke} -Dheadless=${HEADLESS:-false} \
+                        -Dremote=$GRID_URL -DbaseUrl=$APP_URL \
+                        -Dmaven.test.failure.ignore=true'''
+            }
+        }
+    }
+
+    post {
+        always {
+            junit testResults: 'selenide-testng/target/surefire-reports/TEST-*.xml', allowEmptyResults: true
+            allure commandline: 'allure', includeProperties: false,
+                   results: [[path: 'selenide-testng/target/allure-results']]
+            archiveArtifacts artifacts: 'selenide-testng/target/artifacts/selenide-reports/**', allowEmptyArchive: true
+        }
+    }
+}

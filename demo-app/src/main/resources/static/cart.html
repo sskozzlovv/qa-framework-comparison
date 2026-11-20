@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sandbox Shop - Cart</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/catalog.html">Sandbox Shop</a>
+  <nav>
+    <a id="nav-catalog" href="/catalog.html">Catalog</a>
+    <a id="nav-orders" href="/orders.html">Orders</a>
+    <a id="nav-playground" href="/playground.html">Playground</a>
+    <a id="nav-cart" href="/cart.html">Cart <span id="cart-badge" class="badge" hidden></span></a>
+    <span id="current-user"></span>
+    <button id="logout" class="secondary">Log out</button>
+  </nav>
+</header>
+<div id="spinner" class="spinner-overlay" hidden><div class="spinner" role="progressbar" aria-label="Loading"></div></div>
+<div id="toasts"></div>
+<main>
+  <h1>Your cart</h1>
+  <div class="panel">
+    <p id="empty-cart" hidden>Your cart is empty.</p>
+    <div id="cart-items"></div>
+    <p>Total: <b id="cart-total">$0.00</b></p>
+    <button id="checkout" disabled>Checkout</button>
+  </div>
+</main>
+<script src="/app.js"></script>
+<script>
+  if (App.requireAuth()) {
+    App.initHeader();
+
+    function render(cart) {
+      const box = App.$('cart-items');
+      box.innerHTML = '';
+      for (const item of cart.items) {
+        const row = document.createElement('div');
+        row.className = 'cart-item';
+        row.dataset.id = item.productId;
+        row.innerHTML = `<span class="name">${item.name}</span><span class="qty">x${item.qty}</span>
+          <span class="line-total">${App.money(item.priceCents * item.qty)}</span><button class="remove secondary">Remove</button>`;
+        row.querySelector('.remove').addEventListener('click', () => remove(item, row));
+        box.appendChild(row);
+      }
+      updateSummary(cart);
+    }
+
+    function updateSummary(cart) {
+      App.$('cart-total').textContent = App.money(cart.totalCents);
+      App.$('empty-cart').hidden = cart.items.length > 0;
+      App.$('checkout').disabled = cart.items.length === 0;
+    }
+
+    // The row fades out (0.5 s CSS transition) and is removed from the DOM only after the API call AND the animation
+    async function remove(item, row) {
+      row.querySelector('.remove').disabled = true;
+      row.classList.add('removing');
+      const [cart] = await Promise.all([App.api('DELETE', '/api/cart/' + item.productId), App.sleep(500)]);
+      row.remove();
+      updateSummary(cart);
+      App.refreshBadge();
+    }
+
+    App.$('checkout').addEventListener('click', () => location.assign('/checkout.html'));
+    App.withSpinner(App.api('GET', '/api/cart')).then(render);
+  }
+</script>
+</body>
+</html>

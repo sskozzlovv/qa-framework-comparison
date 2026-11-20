@@ -1,0 +1,16 @@
+{
+  "name": "framework-comparison-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tooling for the whole repository: Allure reports (Allure 2 and Allure 3) for Selenide (JUnit 5), Selenide (TestNG) and Playwright TS",
+  "scripts": {
+    "allure2:generate": "node scripts/allure-report.mjs 2 generate",
+    "allure2:open": "node scripts/allure-report.mjs 2 open",
+    "allure3:generate": "node scripts/allure-report.mjs 3 generate",
+    "allure3:open": "node scripts/allure-report.mjs 3 open"
+  },
+  "devDependencies": {
+    "allure": "3.22.1",
+    "allure-commandline": "2.46.1"
+  }
+}
